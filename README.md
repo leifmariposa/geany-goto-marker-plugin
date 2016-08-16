@@ -4,13 +4,13 @@ Goto Marker Plugin for Geany
 About
 -----------
 
-Goto Marker is a plugin for Geany that provides a dialog for quickly going to a function in the current document.
+Goto Marker is a plugin for Geany that provides a dialog for quickly going to a bookmark in the current document.
 
 
 Building and Installing
 -----------------------
 
-Download the plugin from https://github.com/leifmariposa/geany-goto-function-plugin
+Download the plugin from https://github.com/leifmariposa/geany-goto-marker-plugin
 
 Then run the following commands:
 
@@ -23,15 +23,15 @@ Using the Plugin
 ----------------
 
 After having enabled the plugin inside Geany through Geany's plugin manager,
-you'll need to setup a keybinding for triggering the Goto Function dialog. Go to
-the preferences, and under the Keybindings tab set the Goto Function keybinding. 
+you'll need to setup a keybinding for triggering the Goto Marker dialog. Go to
+the preferences, and under the Keybindings tab set the Goto Marker keybinding. 
 
 Using the plugin is simple. Press the keybinding that you selected and the dialog will be shown.
-Start typing any part of the function name, if the desired function is first in 
+Start typing the line numer any part of the text of the line to filter the markers in the list. If the marker is first in 
 the list (at the top) you can just press enter to activete it, if not use arrow down until it is 
 selected and then press enter to activate it.
                                               
-![screenshot](https://github.com/leifmariposa/geany-goto-function-plugin/blob/master/screenshots/screenshot.png?raw=true)
+![screenshot](https://github.com/leifmariposa/geany-goto-marker-plugin/blob/master/screenshots/screenshot.png?raw=true)
 
 License
 ----------------
@@ -52,4 +52,4 @@ Bug reports and feature requests
 ----------------
 
 To report a bug or ask for a new feature, please use the tracker
-on GitHub: https://github.com/leifmariposa/geany-goto-function-plugin/issues
+on GitHub: https://github.com/leifmariposa/geany-goto-marker-plugin/issues
