@@ -68,6 +68,8 @@ struct PLUGIN_DATA
 	GtkTreeModel        *filter;
 	GtkTreeModel        *sorted;
 	const gchar         *text_value;
+	GtkWidget           *remove_all_markers;
+	GtkWidget           *remove_marker;
 	GtkWidget           *cancel_button;
 	GtkWidget           *goto_button;
 } PLUGIN_DATA;
@@ -98,7 +100,7 @@ static GtkTreeModel* get_markers()
 	if (doc && doc->is_valid)
 	{
 
-		ScintillaObject* sci=doc->editor->sci;
+		ScintillaObject* sci = doc->editor->sci;
 		gint mask = 1 << 1;
 		gint line_nr = 0;
 
@@ -139,7 +141,7 @@ void select_first_row(struct PLUGIN_DATA *plugin_data)
 
 
 /**********************************************************************/
-static int on_update_visibilty_elements(G_GNUC_UNUSED GtkWidget *widget, struct PLUGIN_DATA *plugin_data)
+static int update_gui_elements(G_GNUC_UNUSED GtkWidget *widget, struct PLUGIN_DATA *plugin_data)
 {
 	D(log_debug("%s:%s", __FILE__, __FUNCTION__));
 
@@ -157,6 +159,8 @@ static int on_update_visibilty_elements(G_GNUC_UNUSED GtkWidget *widget, struct 
 
 	select_first_row(plugin_data);
 
+	gtk_widget_set_sensitive(plugin_data->remove_all_markers, filtered_rows > 0);
+	gtk_widget_set_sensitive(plugin_data->remove_marker, filtered_rows > 0);
 	gtk_widget_set_sensitive(plugin_data->goto_button, filtered_rows > 0);
 
 	return 0;
@@ -227,6 +231,73 @@ void activate_selected_function_and_quit(struct PLUGIN_DATA *plugin_data)
 
 
 /**********************************************************************/
+void remove_all_markers(struct PLUGIN_DATA *plugin_data)
+{
+	D(log_debug("%s:%s", __FILE__, __FUNCTION__));
+
+	GeanyDocument * doc = document_get_current();
+	if (doc && doc->is_valid)
+	{
+		ScintillaObject* sci = doc->editor->sci;
+		gint mask = 1 << 0;
+		scintilla_send_message(sci, SCI_MARKERDELETEALL, mask, 0);
+		
+		GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(plugin_data->tree_view));
+		GtkTreeModel *filter_model = gtk_tree_model_sort_get_model(GTK_TREE_MODEL_SORT(model));
+		GtkTreeModel *data_model = gtk_tree_model_filter_get_model (GTK_TREE_MODEL_FILTER(filter_model));
+		gtk_list_store_clear(GTK_LIST_STORE(data_model));
+	}
+}
+
+
+/**********************************************************************/
+void remove_selected_marker(struct PLUGIN_DATA *plugin_data)
+{
+	GtkTreePath *path = NULL;
+
+	D(log_debug("%s:%s", __FILE__, __FUNCTION__));
+
+	gtk_tree_view_get_cursor(GTK_TREE_VIEW(plugin_data->tree_view), &path, NULL);
+	if(path)
+	{
+		GtkTreeIter iter;
+		GtkTreeModel *model = gtk_tree_view_get_model(GTK_TREE_VIEW(plugin_data->tree_view));
+		if(gtk_tree_model_get_iter(model, &iter, path))
+		{
+			guint line;
+			gtk_tree_model_get(plugin_data->sorted, &iter, COL_LINE_NUMBER, &line, -1);
+
+			GeanyDocument * doc = document_get_current();
+			if (doc && doc->is_valid)
+			{
+				ScintillaObject* sci = doc->editor->sci;
+				gint mask = 1 << 0;
+				scintilla_send_message(sci, SCI_MARKERDELETE , line - 1, mask);
+
+				/* We have the sorted iter and model */
+				/* Get filter iter and model */
+				GtkTreeIter filter_iter;
+				gtk_tree_model_sort_convert_iter_to_child_iter(GTK_TREE_MODEL_SORT(model), &filter_iter, &iter);
+				GtkTreeModel *filter_model = gtk_tree_model_sort_get_model(GTK_TREE_MODEL_SORT(model));
+
+				/* Get iter and model */
+				GtkTreeIter child_iter;
+				gtk_tree_model_filter_convert_iter_to_child_iter(GTK_TREE_MODEL_FILTER(filter_model), &child_iter, &filter_iter);
+				GtkTreeModel *data_model = gtk_tree_model_filter_get_model (GTK_TREE_MODEL_FILTER(filter_model));
+
+				/* Remove row */
+				gtk_list_store_remove(GTK_LIST_STORE(data_model), &child_iter);
+
+				/* Select the same row as before the deletion */
+				gtk_tree_view_set_cursor(GTK_TREE_VIEW(plugin_data->tree_view), path, NULL, FALSE);
+			}
+		}
+		gtk_tree_path_free(path);
+	}
+}
+
+
+/**********************************************************************/
 void view_on_row_activated(G_GNUC_UNUSED GtkTreeView *treeview,
 													 G_GNUC_UNUSED GtkTreePath *path,
 													 G_GNUC_UNUSED GtkTreeViewColumn *col,
@@ -254,7 +325,7 @@ static void create_tree_view(struct PLUGIN_DATA *plugin_data)
 	gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(plugin_data->tree_view ),FALSE);
 	g_signal_connect(plugin_data->tree_view, "row-activated", (GCallback) view_on_row_activated, plugin_data);
 
-  GtkCellRenderer *renderer1 = gtk_cell_renderer_text_new();
+	GtkCellRenderer *renderer1 = gtk_cell_renderer_text_new();
 	gtk_tree_view_insert_column_with_attributes(GTK_TREE_VIEW(plugin_data->tree_view ), -1, "line_number", renderer1, "text", COL_LINE_NUMBER, NULL);
 
 	GtkCellRenderer *renderer2 = gtk_cell_renderer_text_new();
@@ -294,6 +365,26 @@ static gboolean on_key_press(G_GNUC_UNUSED GtkWidget *widget, GdkEventKey *event
 	}
 
 	return FALSE;
+}
+
+
+/**********************************************************************/
+static void on_remove_all_markers(G_GNUC_UNUSED GtkButton *button, struct PLUGIN_DATA *plugin_data)
+{
+	D(log_debug("%s:%s", __FILE__, __FUNCTION__));
+	
+	remove_all_markers(plugin_data);
+	update_gui_elements(NULL, plugin_data);
+}
+
+
+/**********************************************************************/
+static void on_remove_marker(G_GNUC_UNUSED GtkButton *button, struct PLUGIN_DATA *plugin_data)
+{
+	D(log_debug("%s:%s", __FILE__, __FUNCTION__));
+
+	remove_selected_marker(plugin_data);
+	update_gui_elements(NULL, plugin_data);
 }
 
 
@@ -341,7 +432,7 @@ int launch_widget(void)
 	gtk_table_set_col_spacings(GTK_TABLE(main_grid), 0);
 
 	plugin_data->text_entry = gtk_entry_new();
-	g_signal_connect(plugin_data->text_entry, "changed", G_CALLBACK(on_update_visibilty_elements), plugin_data);
+	g_signal_connect(plugin_data->text_entry, "changed", G_CALLBACK(update_gui_elements), plugin_data);
 	gtk_table_attach(GTK_TABLE(main_grid), plugin_data->text_entry, 0, 1, 0, 1, GTK_EXPAND | GTK_FILL, GTK_SHRINK, 0, 0);
 
 	GtkWidget *scrolled_file_list_window = gtk_scrolled_window_new(NULL,NULL);
@@ -361,6 +452,16 @@ int launch_widget(void)
 	GtkWidget *bbox = gtk_hbutton_box_new();
 	gtk_button_box_set_layout(GTK_BUTTON_BOX(bbox), GTK_BUTTONBOX_END);
 
+	plugin_data->remove_all_markers = gtk_button_new_with_mnemonic(_("Remove _all Markers"));
+	gtk_widget_set_tooltip_text(plugin_data->remove_all_markers, _("Removes all Markers from the active document"));
+	gtk_container_add(GTK_CONTAINER(bbox), plugin_data->remove_all_markers);
+	g_signal_connect(plugin_data->remove_all_markers, "clicked", G_CALLBACK(on_remove_all_markers), plugin_data);
+
+	plugin_data->remove_marker = gtk_button_new_with_mnemonic(_("_Remove Marker"));
+	gtk_widget_set_tooltip_text(plugin_data->remove_marker, _("Remove selected Marker from the active document"));
+	gtk_container_add(GTK_CONTAINER(bbox), plugin_data->remove_marker);
+	g_signal_connect(plugin_data->remove_marker, "clicked", G_CALLBACK(on_remove_marker), plugin_data);
+
 	plugin_data->cancel_button = gtk_button_new_with_mnemonic(_("_Cancel"));
 	gtk_container_add(GTK_CONTAINER(bbox), plugin_data->cancel_button);
 	g_signal_connect(plugin_data->cancel_button, "clicked", G_CALLBACK(on_cancel_button), plugin_data);
@@ -375,7 +476,7 @@ int launch_widget(void)
 	gtk_widget_show_all(plugin_data->main_window);
 
 	select_first_row(plugin_data);
-	on_update_visibilty_elements(NULL, plugin_data);
+	update_gui_elements(NULL, plugin_data);
 
 	return 0;
 }
